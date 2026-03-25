@@ -35505,10 +35505,14 @@ function getText(layer, parentFrame) {
         }
     }
     function getTracking(layer) {
+        // AE tracking unit = 1/1000 em. 1 em = fontSize px (at 72 dpi = 1pt/px).
+        // We Math.round here so that host.jsx Math.floor loses nothing.
         if (layer.letterSpacing.unit == 'PIXELS') {
-            return layer.fontSize * layer.letterSpacing.value * 3.9;
+            // px → em fraction → AE units:  value / fontSize * 1000
+            return Math.round(layer.letterSpacing.value / layer.fontSize * 1000);
         } else if (layer.letterSpacing.unit == 'PERCENT') {
-            return layer.letterSpacing.value * 10;
+            // X% of fontSize = X/100 em = X*10 AE units
+            return Math.round(layer.letterSpacing.value * 10);
         } else {
             return 0;
         }
