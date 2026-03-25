@@ -35897,18 +35897,10 @@ function getFills(layer, parentFrame) {
 }
 //// get layer data: IMAGE
 function getImageFill(layer, parentFrame) {
-    let frame = getFrame(layer, parentFrame, true)
-    // console.log('frameSize', frame);
-    
-    // resize the image frame to fit within the frame because the exported image will be cropped
-    if (frame.width > frameSize[0]) {
-        frame.width = frameSize[0]
-        frame.x = frameSize[0] / 2
-    }
-    if (frame.height > frameSize[1]) {
-        frame.height = frameSize[1]
-        frame.y = frameSize[1] / 2
-    }
+    // Use full layer dimensions (no constraining) — AE clips layers that extend beyond the comp boundary.
+    // Previously constrainFrame=true shrank the frame to the visible (clipped) area, but the exported
+    // PNG always contains the full layer, causing scale/position mismatch for layers outside frame bounds.
+    let frame = getFrame(layer, parentFrame, false)
     
     
 	let layerData =  {

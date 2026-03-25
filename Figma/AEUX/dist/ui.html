@@ -35397,12 +35397,32 @@ function getText(layer, parentFrame) {
 
     var tempFrame = getFrame(layer, parentFrame);
     var lineHeight = getLineHeight(layer);
+
+    // AE area text places its baseline at position_y (frame.y).
+    // We need to send the exact baseline Y so text aligns with Figma.
+    // autoBaselineFromTop was measured in code.js by temporarily rendering 'H'.
+    var layerTopInComp = tempFrame.y - layer.height / 2;
+    var frameY = tempFrame.y; // fallback: center_y
+    if (layer.autoBaselineFromTop !== undefined) {
+        // Exact per-font baseline from precomputeTextBaselines() in code.js.
+        // For multi-line or fixed-height boxes the first baseline sits at the
+        // same offset from the top as it does in the single-line 'H' measurement.
+        frameY = layerTopInComp + layer.autoBaselineFromTop;
+    } else if (layer.absoluteRenderBounds && layer.absoluteBoundingBox) {
+        // Fallback approximation: render bounds bottom minus descender estimate.
+        var renderOffsetTop = layer.absoluteRenderBounds.y - layer.absoluteBoundingBox.y;
+        frameY = layerTopInComp + renderOffsetTop + layer.absoluteRenderBounds.height - layer.fontSize * 0.2;
+    } else {
+        // Last-resort fallback.
+        var leadingAbove = Math.max(0, (layer.height - layer.fontSize) / 2);
+        frameY = layerTopInComp + leadingAbove + layer.fontSize * 0.73;
+    }
+
     frame = {
         width: layer.width,
         height: layer.height,
         x: tempFrame.x,
-        // y: 454, //428
-        y: tempFrame.y,
+        y: frameY,
     };
     
 	var layerData =  {
@@ -35990,20 +36010,12 @@ function getFills(layer, parentFrame) {
 }
 //// get layer data: IMAGE
 function getImageFill(layer, parentFrame) {
-    let frame = getFrame(layer, parentFrame, true)
-    // console.log('frameSize', frame);
-    
-    // resize the image frame to fit within the frame because the exported image will be cropped
-    if (frame.width > frameSize[0]) {
-        frame.width = frameSize[0]
-        frame.x = frameSize[0] / 2
-    }
-    if (frame.height > frameSize[1]) {
-        frame.height = frameSize[1]
-        frame.y = frameSize[1] / 2
-    }
-    
-    
+    // Use full layer dimensions (no constraining) — AE clips layers that extend beyond the comp boundary.
+    // Previously constrainFrame=true shrank the frame to the visible (clipped) area, but the exported
+    // PNG always contains the full layer, causing scale/position mismatch for layers outside frame bounds.
+    let frame = getFrame(layer, parentFrame, false)
+
+
 	let layerData =  {
         type: 'Image',
         name: layer.name.toString().replace(/[\\:"*?%<>|]/g, '-'),     // replace illegal characters

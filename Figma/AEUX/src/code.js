@@ -12,12 +12,54 @@ let shapeTree = [];
 let imageHashList = [];
 let imageBytesList = [];
 let rasterizeList = [];
+let textBaselineMap = new Map();
 let prefs = {
     exportRefImage: false,
     imgSaveDialog: false,
 };
+// Measure exact baseline for each TEXT node by temporarily setting characters to 'H'
+async function precomputeTextBaselines(nodes) {
+    for (const node of nodes) {
+        if (node.type === 'TEXT') {
+            const originalChars = node.characters;
+            const originalAutoResize = node.textAutoResize;
+            const originalY = node.y;
+            try {
+                const fontName = (node.fontName !== figma.mixed)
+                    ? node.fontName
+                    : node.getRangeFontName(0, 1);
+                await figma.loadFontAsync(fontName);
+                // Lock box size, swap to 'H', then move to y=0 so the character
+                // renders inside the parent frame — absoluteRenderBounds is clipped
+                // by "clip content" frames for nodes that extend beyond the boundary.
+                // autoBaselineFromTop = rb.bottom - bb.top is a difference so it is
+                // position-independent: moving node doesn't change the result.
+                node.textAutoResize = 'NONE';
+                node.characters = 'H';
+                node.y = 0;
+                const bb = node.absoluteBoundingBox;
+                const rb = node.absoluteRenderBounds;
+                if (rb && bb) {
+                    textBaselineMap.set(node.id, {
+                        autoBaselineFromTop: rb.y + rb.height - bb.y,
+                        autoLineHeightPx: bb.height,
+                    });
+                }
+            } catch(e) {
+                console.log('baseline precompute error', node.name, e);
+            } finally {
+                try { node.characters = originalChars; } catch(e2) {}
+                try { node.textAutoResize = originalAutoResize; } catch(e2) {}
+                try { node.y = originalY; } catch(e2) {}
+            }
+        }
+        if ('children' in node) {
+            await precomputeTextBaselines(node.children);
+        }
+    }
+}
 // receive message from the UI
-figma.ui.onmessage = message => {
+figma.ui.onmessage = async message => {
     if (message.type === 'getPrefs') {
         // console.log('get those prefs');
         figma.clientStorage.getAsync('aeux.prefs')
@@ -55,6 +97,7 @@ figma.ui.onmessage = message => {
         imageHashList = [];
         imageBytesList = [];
         rasterizeList = [];
+        textBaselineMap = new Map();
         let exportJSON = false;
         if (message.exportJSON) {
             exportJSON = true;
@@ -64,6 +107,7 @@ figma.ui.onmessage = message => {
             figma.ui.postMessage({ type: 'fetchAEUX', data: null });
             return;
         }
+        await precomputeTextBaselines(figma.currentPage.selection);
         try {
             // pre-process the selected shapes hierarchy
             let selection = nodeToObj(figma.currentPage.selection);
@@ -311,6 +355,12 @@ function nodeToObj(nodes) {
             catch (error) {
                 console.log('ERROR', error);
             }
+        }
+        // inject exact baseline measurements for text nodes
+        if (node.type === 'TEXT' && textBaselineMap.has(node.id)) {
+            const baselineData = textBaselineMap.get(node.id);
+            obj.autoBaselineFromTop = baselineData.autoBaselineFromTop;
+            obj.autoLineHeightPx = baselineData.autoLineHeightPx;
         }
         // keep track of Auto-layout frames for alignment of children
         if (node.type === 'FRAME' && node.layoutMode !== 'NONE') {
