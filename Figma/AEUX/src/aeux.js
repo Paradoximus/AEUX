@@ -192,24 +192,16 @@ function getText(layer, parentFrame) {
     var tempFrame = getFrame(layer, parentFrame);
     var lineHeight = getLineHeight(layer);
 
-    // AE area text places its baseline at position_y (frame.y).
-    // We need to send the exact baseline Y so text aligns with Figma.
-    // autoBaselineFromTop was measured in code.js by temporarily rendering 'H'.
+    // AE area text (addBoxText) anchor is at the first-line baseline.
+    // The installed host.jsx formula expects frame.y = center_y and converts:
+    //   position_y = (frame.y - frame.height/2 - rect.top) * compMult
+    // We only override frame.y when we have the exact baseline from code.js,
+    // otherwise we keep center_y so the host.jsx formula keeps working as before.
     var layerTopInComp = tempFrame.y - layer.height / 2;
-    var frameY = tempFrame.y; // fallback: center_y
+    var frameY = tempFrame.y; // default: center_y — compatible with host.jsx formula
     if (layer.autoBaselineFromTop !== undefined) {
-        // Exact per-font baseline from precomputeTextBaselines() in code.js.
-        // For multi-line or fixed-height boxes the first baseline sits at the
-        // same offset from the top as it does in the single-line 'H' measurement.
+        // Exact per-font baseline measured in code.js via temporary 'H' render.
         frameY = layerTopInComp + layer.autoBaselineFromTop;
-    } else if (layer.absoluteRenderBounds && layer.absoluteBoundingBox) {
-        // Fallback approximation: render bounds bottom minus descender estimate.
-        var renderOffsetTop = layer.absoluteRenderBounds.y - layer.absoluteBoundingBox.y;
-        frameY = layerTopInComp + renderOffsetTop + layer.absoluteRenderBounds.height - layer.fontSize * 0.2;
-    } else {
-        // Last-resort fallback.
-        var leadingAbove = Math.max(0, (layer.height - layer.fontSize) / 2);
-        frameY = layerTopInComp + leadingAbove + layer.fontSize * 0.73;
     }
 
     frame = {
