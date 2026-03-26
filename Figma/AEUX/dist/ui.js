@@ -35306,7 +35306,7 @@ function getText(layer, parentFrame) {
     var lineHeight = getLineHeight(layer);
     frame = {
         width: layer.width,
-        height: layer.height,
+        height: layer.height + lineHeight, // extra line so AE never clips the last line
         x: tempFrame.x,
         // y: 454, //428
         y: tempFrame.y,

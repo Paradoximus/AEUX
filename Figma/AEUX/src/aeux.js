@@ -206,7 +206,7 @@ function getText(layer, parentFrame) {
 
     frame = {
         width: layer.width,
-        height: layer.height,
+        height: layer.height + lineHeight, // extra line so AE never clips the last line
         x: tempFrame.x,
         y: frameY,
     };
